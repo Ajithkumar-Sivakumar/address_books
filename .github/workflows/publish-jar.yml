@@ -4,11 +4,10 @@ on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -33,13 +32,28 @@ jobs:
           server-username: GITHUB_ACTOR
           server-password: GITHUB_TOKEN
 
-      - name: Build and test JAR
-        if: github.ref_type != 'tag'
-        run: mvn --batch-mode verify
-
-      - name: Build and publish JAR to GitHub Packages
-        if: github.ref_type == 'tag'
-        run: mvn --batch-mode deploy
+      - name: Build and publish uniquely versioned JAR
+        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+        run: |
+          VERSION="1.0.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+          echo "Publishing com.example:address-book-microservices:${VERSION}"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "### Maven package" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`com.example:address-book-microservices:${VERSION}\`" >> "$GITHUB_STEP_SUMMARY"
+          mvn --batch-mode --no-transfer-progress -Drevision="${VERSION}" deploy
+        id: publish
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and test JAR
+        if: github.event_name == 'pull_request' || github.ref != 'refs/heads/main'
+        run: mvn --batch-mode --no-transfer-progress -Drevision="1.0.${GITHUB_RUN_NUMBER}" verify
+
+      - name: Upload JAR to workflow run
+        uses: actions/upload-artifact@v4
+        with:
+          name: address-book-${{ github.run_number }}-${{ github.run_attempt }}
+          path: target/address-book.jar
+          if-no-files-found: error
+          retention-days: 30

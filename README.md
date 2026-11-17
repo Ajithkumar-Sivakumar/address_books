@@ -2,7 +2,7 @@
 
 A beginner-friendly address book built with Java 21, Spring Boot, Maven, and PostgreSQL. The Spring Boot application serves both a responsive browser interface and a REST API. Docker runs the app and PostgreSQL as separate containers on a private network, with PostgreSQL data kept in a named volume.
 
-The GitHub Actions workflow runs tests for pull requests and publishes the application JAR to GitHub Packages when a version tag is pushed. This project does not provision cloud resources or include Kubernetes or Helm configuration.
+The GitHub Actions workflow runs tests for pull requests and publishes a uniquely versioned application JAR to GitHub Packages on each push to `main`. This project does not provision cloud resources or include Kubernetes or Helm configuration.
 
 ## 1. Project overview
 
@@ -359,6 +359,6 @@ docker image rm addressbook-app:1.0 addressbook-db:1.0
 
 ## 16. GitHub Actions and published JAR
 
-The workflow at `.github/workflows/publish-jar.yml` runs `mvn verify` on pull requests and pushes to `main`. Pushing a version tag such as `v1.0.0` runs `mvn deploy` and publishes the JAR and Maven metadata to GitHub Packages. The package version comes from `pom.xml`; keep it in sync with the version tag. The workflow uses the repository's `GITHUB_TOKEN`, so ensure Actions are allowed to write packages in the repository settings.
+The workflow at `.github/workflows/publish-jar.yml` runs `mvn verify` on pull requests. Each push to `main` runs `mvn deploy` and publishes the JAR and Maven metadata to GitHub Packages using the unique version `1.0.<GitHub run number>.<run attempt>` (for example, `1.0.42.1`). This avoids reusing a package version, including when a run is retried, and does not use a commit ID or require Git tags. The workflow also uploads the JAR to the Actions run as a downloadable artifact. Logs for the Maven build and publish are shown by expanding the corresponding step in the workflow run. The workflow uses the repository's `GITHUB_TOKEN`; ensure Actions are allowed to write packages in the repository settings.
 
-The published artifact coordinates are `com.example:address-book-microservices:1.0.0`. You can download the executable JAR from the package page in GitHub or consume it as a Maven dependency using the repository URL configured in `pom.xml`.
+The published artifact coordinates are `com.example:address-book-microservices:1.0.<GitHub run number>.<run attempt>`. You can download the executable JAR from the package page in GitHub or from the successful Actions run, or consume it as a Maven dependency using the repository URL configured in `pom.xml`.
