@@ -163,7 +163,7 @@ docker build -t addressbook-db:1.0 -f docker/database/Dockerfile .
 docker build -t addressbook-app:1.0 -f docker/Dockerfile .
 ```
 
-Start PostgreSQL, then wait for its health check to report `healthy`:
+Start PostgreSQL:
 
 ```bash
 docker run -d --name addressbook-db \
@@ -173,11 +173,16 @@ docker run -d --name addressbook-db \
   -p 127.0.0.1:5432:5432 \
   -v addressbook-data:/var/lib/postgresql/data \
   addressbook-db:1.0
+```
 
+Wait for the database container to become healthy before starting the app:
+
+```bash
+docker ps
 docker inspect --format='{{.State.Health.Status}}' addressbook-db
 ```
 
-Start the app on the same network. Its datasource URL uses the database container name; `localhost` inside the app container would refer to the app itself:
+The health status should be `healthy`. Start the app on the same network. Its datasource URL uses the database container name; `localhost` inside the app container would refer to the app itself:
 
 ```bash
 docker run -d --name addressbook-app \
@@ -191,6 +196,52 @@ docker run -d --name addressbook-app \
 ```
 
 Open [http://localhost:8080](http://localhost:8080). If you change `SERVER_PORT` in `.env`, update the host port mapping to match. View container status and logs with `docker ps`, `docker logs -f addressbook-app`, and `docker logs -f addressbook-db`. No Docker Compose commands are needed.
+
+### Add a contact and confirm it is saved in PostgreSQL
+
+Open the app at [http://localhost:8080](http://localhost:8080), fill in the contact form, and submit it. The app should show the new contact. You can also create a contact from a terminal using the API:
+
+```bash
+curl -i -X POST http://localhost:8080/api/contacts \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "firstName": "Katherine",
+    "lastName": "Johnson",
+    "email": "katherine.johnson@example.com",
+    "phoneNumber": "+1 555 0123"
+  }'
+```
+
+The API should return `201 Created`. To open a PostgreSQL prompt inside the database container:
+
+```bash
+docker exec -it addressbook-db psql -U addressuser -d addressbook
+```
+
+At the `addressbook=#` prompt, list saved contacts:
+
+```sql
+SELECT id, first_name, last_name, email, phone_number, created_at
+FROM contacts
+ORDER BY id;
+```
+
+Check that the newly submitted contact exists:
+
+```sql
+SELECT id, first_name, last_name, email, phone_number
+FROM contacts
+WHERE email = 'katherine.johnson@example.com';
+```
+
+Type `\q` to exit `psql`. For a one-line query without entering the interactive prompt, run:
+
+```bash
+docker exec addressbook-db psql -U addressuser -d addressbook \
+  -c "SELECT id, first_name, last_name, email, phone_number FROM contacts ORDER BY id;"
+```
+
+The database image loads the sample rows only when the data volume is initialized for the first time. The named `addressbook-data` volume preserves contact records when containers are restarted or recreated.
 
 ## 9. Docker networking and persistent storage
 
