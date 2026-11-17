@@ -2,7 +2,7 @@
 
 A beginner-friendly address book built with Java 21, Spring Boot, Maven, and PostgreSQL. The Spring Boot application serves both a responsive browser interface and a REST API. Docker runs the app and PostgreSQL as separate containers on a private network, with PostgreSQL data kept in a named volume.
 
-This first phase is intentionally local: it does not provision cloud resources, require a registry, or include Kubernetes, Helm, or CI/CD configuration.
+The GitHub Actions workflow runs tests for pull requests and publishes the application JAR to GitHub Packages when a version tag is pushed. This project does not provision cloud resources or include Kubernetes or Helm configuration.
 
 ## 1. Project overview
 
@@ -356,3 +356,9 @@ Remove the locally built images when they are no longer needed:
 ```bash
 docker image rm addressbook-app:1.0 addressbook-db:1.0
 ```
+
+## 16. GitHub Actions and published JAR
+
+The workflow at `.github/workflows/publish-jar.yml` runs `mvn verify` on pull requests and pushes to `main`. Pushing a version tag such as `v1.0.0` runs `mvn deploy` and publishes the JAR and Maven metadata to GitHub Packages. The package version comes from `pom.xml`; keep it in sync with the version tag. The workflow uses the repository's `GITHUB_TOKEN`, so ensure Actions are allowed to write packages in the repository settings.
+
+The published artifact coordinates are `com.example:address-book-microservices:1.0.0`. You can download the executable JAR from the package page in GitHub or consume it as a Maven dependency using the repository URL configured in `pom.xml`.
