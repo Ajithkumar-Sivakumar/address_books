@@ -418,7 +418,7 @@ The workflow in `.github/workflows/publish-jar.yml`:
 
 ### Cloudsmith settings
 
-Cloudsmith repository: [`demo-java/address_book`](https://cloudsmith.io/~demo-java/repos/address_book/packages/).
+Cloudsmith Maven packages: [`demo-java/address_book`](https://cloudsmith.io/~demo-java/repos/address_book/packages/?q=format%3Amaven).
 
 The workflow uses these GitHub Actions settings:
 

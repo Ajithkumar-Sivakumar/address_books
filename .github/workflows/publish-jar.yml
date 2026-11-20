@@ -52,7 +52,7 @@ jobs:
           : "${CLOUDSMITH_WORKSPACE:?Set the CLOUDSMITH_WORKSPACE repository variable}" # Require the workspace setting.
           : "${CLOUDSMITH_MAVEN_REPOSITORY:?Set the CLOUDSMITH_MAVEN_REPOSITORY repository variable}" # Require the repository setting.
 
-          REPOSITORY_URL="https://cloudsmith.io/~${CLOUDSMITH_WORKSPACE}/repos/${CLOUDSMITH_MAVEN_REPOSITORY}/packages/" # Build the package page URL.
+          REPOSITORY_URL="https://cloudsmith.io/~${CLOUDSMITH_WORKSPACE}/repos/${CLOUDSMITH_MAVEN_REPOSITORY}/packages/?q=format%3Amaven" # Open the Maven packages list.
           echo "Publishing version ${VERSION}" # Show which package version is being uploaded.
           echo "Cloudsmith repository: ${REPOSITORY_URL}" # Print where to find published packages.
           cloudsmith credential-helper install maven --local # Make Maven use Cloudsmith credentials.
