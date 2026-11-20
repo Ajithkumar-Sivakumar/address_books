@@ -26,7 +26,7 @@ jobs:
   test-and-publish:
     name: Test, measure coverage, and publish
     # GitHub-hosted Ubuntu includes Docker; setup-java installs Java and Maven.
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     # Stop unexpectedly stuck builds so they do not consume runner time forever.
     timeout-minutes: 30
     steps:
