@@ -1,65 +1,42 @@
 name: Test and publish address book
 
-# Run the checks whenever code is proposed for or added to the main branch.
-# workflow_dispatch also lets an authorized user start the pipeline manually.
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
 
-# The workflow only reads repository contents. Cloudsmith credentials are
-# supplied only to the publishing steps below, never to pull request builds.
 permissions:
   contents: read
 
-# Avoid overlapping pull-request runs for the same branch. Do not cancel a
-# main-branch publish midway, because it may already be uploading artifacts.
-concurrency:
-  group: address-book-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
 jobs:
-  test-and-publish:
-    name: Test, measure coverage, and publish
-    # GitHub-hosted Ubuntu includes Docker; setup-java installs Java and Maven.
+  build:
     runs-on: self-hosted
-    # Stop unexpectedly stuck builds so they do not consume runner time forever.
     timeout-minutes: 30
     steps:
-      # Fetch the exact commit that triggered this run into the runner workspace.
-      - name: 1. Download the source code
+      # Get the source code for this run.
+      - name: Check out source
         uses: actions/checkout@v4
 
-      # Install the project's Java version and cache Maven downloads. The cache
-      # speeds up later runs; Maven still downloads any missing dependencies.
-      - name: 2. Install Java 21 and cache Maven dependencies
+      # Install Java 21 and reuse Maven downloads between runs.
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
 
-      # Run the unit/integration tests, package the app, and generate/check the
-      # JaCoCo coverage report. A unique version is shared by the Maven package
-      # and Docker image; the run attempt makes retries unique too.
-      - name: 3. Run tests and check code coverage
+      # Run tests, build the JAR, and create/check the JaCoCo coverage report.
+      - name: Test and check coverage
         id: verify
         run: |
           VERSION="1.0.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-          # Make this version available to later steps as steps.verify.outputs.version.
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "Running: mvn --batch-mode --no-transfer-progress -Drevision=${VERSION} clean verify"
-          # clean removes stale reports; verify runs tests, creates JaCoCo
-          # reports, and fails if configured line or branch coverage is missed.
           mvn --batch-mode --no-transfer-progress -Drevision="${VERSION}" clean verify
 
-      # Keep coverage and test result files even when verification fails, so a
-      # contributor can inspect the report and see which tests failed.
-      - name: 4. Save the test coverage report
+      # Save the coverage report and test results, including when tests fail.
+      - name: Save coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -70,9 +47,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      # Keep a downloadable copy of the packaged executable for troubleshooting
-      # or manual use. Upload only if verification succeeded and the JAR exists.
-      - name: 5. Save the runnable JAR
+      # Save the runnable JAR for download from the Actions run.
+      - name: Save JAR
         if: success()
         uses: actions/upload-artifact@v4
         with:
@@ -81,11 +57,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Publishing is restricted to main-branch pushes and manual runs on main.
-      # setup-java writes a temporary Maven settings.xml entry. Its server ID
-      # must match the "cloudsmith" ID in pom.xml distributionManagement.
-      # GitHub masks secrets in logs; never print either credential.
-      - name: 6. Configure Maven credentials for Cloudsmith
+      # Configure Cloudsmith credentials only for publishing on main.
+      - name: Set up Cloudsmith credentials
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         uses: actions/setup-java@v4
         with:
@@ -99,10 +72,8 @@ jobs:
           CLOUDSMITH_USERNAME: ${{ secrets.CLOUDSMITH_USERNAME }}
           CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
 
-      # Upload the tested JAR and Maven metadata. Required repository variables
-      # are checked first so a missing setup fails with an actionable message.
-      # Tests are skipped here because step 3 already passed them.
-      - name: 7. Publish the versioned JAR to Cloudsmith
+      # Publish the tested JAR and Maven metadata to Cloudsmith.
+      - name: Publish JAR to Cloudsmith
         if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
         env:
           VERSION: ${{ steps.verify.outputs.version }}
@@ -112,62 +83,7 @@ jobs:
           set -euo pipefail
           : "${CLOUDSMITH_WORKSPACE:?Set the CLOUDSMITH_WORKSPACE repository variable}"
           : "${CLOUDSMITH_MAVEN_REPOSITORY:?Set the CLOUDSMITH_MAVEN_REPOSITORY repository variable}"
-          echo "Publishing com.example:address-book-microservices:${VERSION}"
-          echo "Running: mvn --batch-mode --no-transfer-progress -Drevision=${VERSION} deploy -DskipTests"
           mvn --batch-mode --no-transfer-progress \
             -Dcloudsmith.workspace="${CLOUDSMITH_WORKSPACE}" \
             -Dcloudsmith.repository="${CLOUDSMITH_MAVEN_REPOSITORY}" \
             -Drevision="${VERSION}" deploy -DskipTests
-
-      # Authenticate Docker to the Cloudsmith Docker registry. Feed the API key
-      # through stdin so it is not exposed as a command-line argument.
-      # - name: 8. Sign in to the Cloudsmith Docker registry
-      #   if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      #   env:
-      #     CLOUDSMITH_USERNAME: ${{ secrets.CLOUDSMITH_USERNAME }}
-      #     CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
-      #   run: |
-      #     set -euo pipefail
-      #     : "${CLOUDSMITH_USERNAME:?Set the CLOUDSMITH_USERNAME repository secret}"
-      #     : "${CLOUDSMITH_API_KEY:?Set the CLOUDSMITH_API_KEY repository secret}"
-      #     printf '%s' "${CLOUDSMITH_API_KEY}" | docker login docker.cloudsmith.io \
-      #       --username "${CLOUDSMITH_USERNAME}" \
-      #       --password-stdin
-
-      # Build the runtime image from docker/Dockerfile. --pull checks for newer
-      # base images; the build embeds the same version as the Maven JAR. Add
-      # three tags: unique release, short commit ID for traceability, and latest.
-      # - name: 9. Build and tag the application image
-      #   if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      #   env:
-      #     VERSION: ${{ steps.verify.outputs.version }}
-      #     CLOUDSMITH_WORKSPACE: ${{ vars.CLOUDSMITH_WORKSPACE }}
-      #     CLOUDSMITH_DOCKER_REPOSITORY: ${{ vars.CLOUDSMITH_DOCKER_REPOSITORY }}
-      #   run: |
-      #     set -euo pipefail
-      #     : "${CLOUDSMITH_WORKSPACE:?Set the CLOUDSMITH_WORKSPACE repository variable}"
-      #     : "${CLOUDSMITH_DOCKER_REPOSITORY:?Set the CLOUDSMITH_DOCKER_REPOSITORY repository variable}"
-      #     IMAGE="docker.cloudsmith.io/${CLOUDSMITH_WORKSPACE}/${CLOUDSMITH_DOCKER_REPOSITORY}/address-book"
-      #     echo "Running: docker build --pull --build-arg REVISION=${VERSION} -t ${IMAGE}:${VERSION} ."
-      #     docker build --pull \
-      #       --build-arg "REVISION=${VERSION}" \
-      #       --tag "${IMAGE}:${VERSION}" \
-      #       --tag "${IMAGE}:sha-${GITHUB_SHA::12}" \
-      #       --tag "${IMAGE}:latest" \
-      #       .
-
-      # Send each tag to Cloudsmith. The versioned tag is immutable in meaning;
-      # the commit tag identifies the source revision, while latest is a moving
-      # convenience pointer to the most recently published image.
-      # - name: 10. Push the image tags to Cloudsmith
-      #   if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      #   env:
-      #     VERSION: ${{ steps.verify.outputs.version }}
-      #     CLOUDSMITH_WORKSPACE: ${{ vars.CLOUDSMITH_WORKSPACE }}
-      #     CLOUDSMITH_DOCKER_REPOSITORY: ${{ vars.CLOUDSMITH_DOCKER_REPOSITORY }}
-      #   run: |
-      #     set -euo pipefail
-      #     IMAGE="docker.cloudsmith.io/${CLOUDSMITH_WORKSPACE}/${CLOUDSMITH_DOCKER_REPOSITORY}/address-book"
-      #     docker push "${IMAGE}:${VERSION}"
-      #     docker push "${IMAGE}:sha-${GITHUB_SHA::12}"
-      #     docker push "${IMAGE}:latest"

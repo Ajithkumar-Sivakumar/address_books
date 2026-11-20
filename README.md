@@ -419,7 +419,7 @@ Pull requests run tests and coverage only; they do not receive publishing creden
 
 ### Set up Cloudsmith and GitHub
 
-Create a Cloudsmith repository with the **Maven** format for the JAR. This project’s Maven repository is `demo-java/address_book`. If you enable the Docker publishing stages later, create a separate **Docker**-format repository and use its slug for `CLOUDSMITH_DOCKER_REPOSITORY`; the Docker stages are currently disabled in the workflow.
+Create a Cloudsmith repository with the **Maven** format for the JAR. This project’s Maven repository is `demo-java/address_book`. The workflow currently publishes only the JAR; Docker image publishing is not configured.
 
 In the GitHub repository, open **Settings → Secrets and variables → Actions** and add:
 
@@ -450,7 +450,7 @@ mvn --batch-mode --no-transfer-progress \
   -Drevision="$VERSION" deploy -DskipTests
 ```
 
-The Docker publishing stages are commented out in the current workflow. If you create a Cloudsmith Docker repository and enable those steps, they will use commands like:
+If you later add Docker image publishing, create a Cloudsmith Docker-format repository and use commands like:
 
 ```bash
 IMAGE="docker.cloudsmith.io/$CLOUDSMITH_WORKSPACE/$CLOUDSMITH_DOCKER_REPOSITORY/address-book"
