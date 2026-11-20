@@ -36,7 +36,7 @@ jobs:
         run: |
           if [[ "$GITHUB_REF" == "refs/heads/main" && "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
             VERSION="1.0.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
-            cloudsmith credential-helper install maven
+            cloudsmith credential-helper install maven --local
             mvn --batch-mode --no-transfer-progress clean deploy \
               -Drevision="${VERSION}" \
               -Dcloudsmith.workspace="${CLOUDSMITH_WORKSPACE}" \
