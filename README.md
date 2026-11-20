@@ -410,12 +410,11 @@ docker image rm addressbook-app:1.0 addressbook-db:1.0
 
 ## 16. GitHub Actions: test, coverage, and Cloudsmith publishing
 
-The workflow at `.github/workflows/publish-jar.yml` has two active phases:
+The workflow at `.github/workflows/publish-jar.yml` runs tests and checks coverage on pull requests. A push to `main` also publishes the JAR to Cloudsmith.
 
-1. **Test and measure:** install Java 21 and Maven 3.9.9, run `mvn clean verify`, and create a JaCoCo HTML coverage report. The build fails if line coverage is below 80% or branch coverage is below 70%. Download the `jacoco-coverage-*` artifact from the Actions run to view `index.html`.
-2. **Publish the JAR:** only after tests pass, pushes to `main` publish the JAR and Maven metadata to Cloudsmith using `mvn deploy`.
+JaCoCo creates an HTML coverage report during the build. The build fails if line coverage is below 80% or branch coverage is below 70%.
 
-Pull requests run tests and coverage only; they do not receive publishing credentials. Published Maven versions use `1.0.<GitHub run number>.<run attempt>` (for example, `1.0.42.1`).
+Pull requests run tests and coverage only; Cloudsmith credentials are configured only for pushes or manual runs on `main`. Published Maven versions use the GitHub run number and attempt to avoid reusing a version.
 
 ### Set up Cloudsmith and GitHub
 
@@ -427,43 +426,9 @@ In the GitHub repository, open **Settings → Secrets and variables → Actions*
 |---|---|---|
 | `CLOUDSMITH_WORKSPACE` | Variable | `demo-java` |
 | `CLOUDSMITH_MAVEN_REPOSITORY` | Variable | `address_book` |
-| `CLOUDSMITH_DOCKER_REPOSITORY` | Variable | Docker repository slug; only needed when Docker publishing is enabled |
 | `CLOUDSMITH_USERNAME` | Secret | Cloudsmith username for the upload account |
 | `CLOUDSMITH_API_KEY` | Secret | Cloudsmith API key with upload permissions |
 
 The workspace and Maven repository variables have been configured in this repository's GitHub Actions settings. Store the username and API key under **Settings → Secrets and variables → Actions → Repository secrets**. The workflow reads them as `${{ secrets.CLOUDSMITH_USERNAME }}` and `${{ secrets.CLOUDSMITH_API_KEY }}`; GitHub keeps secret values encrypted and masks them in Actions logs. The Cloudsmith account password shared in chat is not referenced or stored by this workflow. Rotate it, then create a dedicated Cloudsmith API key for CI. Do not put a password or API key in the workflow, source files, or command-line arguments.
 
-### Commands run by CI
-
-The workflow sets `VERSION` to the unique version for that Actions run. Its test and coverage command is:
-
-```bash
-mvn --version
-mvn --batch-mode --no-transfer-progress -Drevision="$VERSION" clean verify
-```
-
-Maven downloads JaCoCo automatically and writes its report to `target/site/jacoco/`. The command to publish the Maven package is:
-
-```bash
-mvn --batch-mode --no-transfer-progress \
-  -Dcloudsmith.workspace="$CLOUDSMITH_WORKSPACE" \
-  -Dcloudsmith.repository="$CLOUDSMITH_MAVEN_REPOSITORY" \
-  -Drevision="$VERSION" deploy -DskipTests
-```
-
-If you later add Docker image publishing, create a Cloudsmith Docker-format repository and use commands like:
-
-```bash
-IMAGE="docker.cloudsmith.io/$CLOUDSMITH_WORKSPACE/$CLOUDSMITH_DOCKER_REPOSITORY/address-book"
-printf '%s' "$CLOUDSMITH_API_KEY" | docker login docker.cloudsmith.io \
-  --username "$CLOUDSMITH_USERNAME" --password-stdin
-docker build --pull --build-arg "REVISION=$VERSION" \
-  --tag "$IMAGE:$VERSION" \
-  --tag "$IMAGE:sha-${GITHUB_SHA:0:12}" \
-  --tag "$IMAGE:latest" .
-docker push "$IMAGE:$VERSION"
-docker push "$IMAGE:sha-${GITHUB_SHA:0:12}"
-docker push "$IMAGE:latest"
-```
-
-The workflow passes the API key to `docker login` through standard input so it is not shown in the command or build log. A published JAR has coordinates `com.example:address-book-microservices:$VERSION`; the image name is `address-book`.
+Maven writes the JaCoCo report to `target/site/jacoco/`. The published artifact coordinates are `com.example:address-book-microservices:<version>`.
