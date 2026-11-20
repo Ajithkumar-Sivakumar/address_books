@@ -426,9 +426,8 @@ In the GitHub repository, open **Settings → Secrets and variables → Actions*
 |---|---|---|
 | `CLOUDSMITH_WORKSPACE` | Variable | `demo-java` |
 | `CLOUDSMITH_MAVEN_REPOSITORY` | Variable | `address_book` |
-| `CLOUDSMITH_USERNAME` | Secret | Cloudsmith username for the upload account |
 | `CLOUDSMITH_API_KEY` | Secret | Cloudsmith API key with upload permissions |
 
-The workspace and Maven repository variables have been configured in this repository's GitHub Actions settings. Store the username and API key under **Settings → Secrets and variables → Actions → Repository secrets**. The workflow reads them as `${{ secrets.CLOUDSMITH_USERNAME }}` and `${{ secrets.CLOUDSMITH_API_KEY }}`; GitHub keeps secret values encrypted and masks them in Actions logs. The Cloudsmith account password shared in chat is not referenced or stored by this workflow. Rotate it, then create a dedicated Cloudsmith API key for CI. Do not put a password or API key in the workflow, source files, or command-line arguments.
+The workspace and Maven repository variables have been configured in this repository's GitHub Actions settings. Store the API key under **Settings → Secrets and variables → Actions → Repository secrets**. The workflow checks the key with Cloudsmith before publishing, then uses Cloudsmith's Maven credential helper for deployment. It does not need your Cloudsmith username or account password. GitHub keeps the key encrypted and masks it in Actions logs. Rotate the account password shared in chat and use a dedicated Cloudsmith API key for CI. Do not put a password or API key in the workflow, source files, or command-line arguments.
 
 Maven writes the JaCoCo report to `target/site/jacoco/`. The published artifact coordinates are `com.example:address-book-microservices:<version>`.
