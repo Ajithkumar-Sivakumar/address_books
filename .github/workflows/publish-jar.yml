@@ -27,6 +27,12 @@ jobs:
           java-version: "21"
           cache: maven
 
+      # Self-hosted runners do not include Maven automatically.
+      - name: Set up Maven
+        uses: stCarolas/setup-maven@v5
+        with:
+          maven-version: 3.9.9
+
       # Run tests, build the JAR, and create/check the JaCoCo coverage report.
       - name: Test and check coverage
         id: verify

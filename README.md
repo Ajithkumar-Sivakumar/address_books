@@ -412,7 +412,7 @@ docker image rm addressbook-app:1.0 addressbook-db:1.0
 
 The workflow at `.github/workflows/publish-jar.yml` has two active phases:
 
-1. **Test and measure:** install Java 21, run `mvn clean verify`, and create a JaCoCo HTML coverage report. The build fails if line coverage is below 80% or branch coverage is below 70%. Download the `jacoco-coverage-*` artifact from the Actions run to view `index.html`.
+1. **Test and measure:** install Java 21 and Maven 3.9.9, run `mvn clean verify`, and create a JaCoCo HTML coverage report. The build fails if line coverage is below 80% or branch coverage is below 70%. Download the `jacoco-coverage-*` artifact from the Actions run to view `index.html`.
 2. **Publish the JAR:** only after tests pass, pushes to `main` publish the JAR and Maven metadata to Cloudsmith using `mvn deploy`.
 
 Pull requests run tests and coverage only; they do not receive publishing credentials. Published Maven versions use `1.0.<GitHub run number>.<run attempt>` (for example, `1.0.42.1`).
@@ -438,6 +438,7 @@ The workspace and Maven repository variables have been configured in this reposi
 The workflow sets `VERSION` to the unique version for that Actions run. Its test and coverage command is:
 
 ```bash
+mvn --version
 mvn --batch-mode --no-transfer-progress -Drevision="$VERSION" clean verify
 ```
 
