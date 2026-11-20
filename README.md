@@ -2,7 +2,7 @@
 
 A beginner-friendly address book built with Java 21, Spring Boot, Maven, and PostgreSQL. The Spring Boot application serves both a responsive browser interface and a REST API. Docker runs the app and PostgreSQL as separate containers on a private network, with PostgreSQL data kept in a named volume.
 
-The GitHub Actions workflow runs tests and checks code coverage for pull requests, then publishes the versioned JAR to Cloudsmith on pushes to `main`. Docker image publishing is currently disabled in the workflow. This project does not provision cloud resources or include Kubernetes or Helm configuration.
+GitHub Actions runs tests and coverage checks on pull requests and publishes versioned JARs to Cloudsmith from `main`.
 
 ## 1. Project overview
 
@@ -410,24 +410,24 @@ docker image rm addressbook-app:1.0 addressbook-db:1.0
 
 ## 16. GitHub Actions: test, coverage, and Cloudsmith publishing
 
-The workflow at `.github/workflows/publish-jar.yml` runs tests and checks coverage on pull requests. A push to `main` also publishes the JAR to Cloudsmith.
+The workflow in `.github/workflows/publish-jar.yml`:
 
-JaCoCo creates an HTML coverage report during the build. The build fails if line coverage is below 80% or branch coverage is below 70%.
+1. Checks out the code and sets up Java 21 with Maven dependency caching.
+2. Runs tests and JaCoCo coverage checks. The build requires at least 80% line coverage and 70% branch coverage.
+3. On pushes to `main` (or manual runs on `main`), signs in to Cloudsmith and publishes the tested Maven package. Pull requests do not receive Cloudsmith credentials.
 
-Pull requests run tests and coverage only; Cloudsmith credentials are configured only for pushes or manual runs on `main`. Published Maven versions use the GitHub run number and attempt to avoid reusing a version.
+### Cloudsmith settings
 
-### Set up Cloudsmith and GitHub
+Cloudsmith repository: [`demo-java/address_book`](https://cloudsmith.io/~demo-java/repos/address_book/packages/).
 
-Create a Cloudsmith repository with the **Maven** format for the JAR. This project’s Maven repository is `demo-java/address_book`. The workflow currently publishes only the JAR; Docker image publishing is not configured.
-
-In the GitHub repository, open **Settings → Secrets and variables → Actions** and add:
+The workflow uses these GitHub Actions settings:
 
 | Name | Type | Value |
 |---|---|---|
 | `CLOUDSMITH_WORKSPACE` | Variable | `demo-java` |
 | `CLOUDSMITH_MAVEN_REPOSITORY` | Variable | `address_book` |
-| `CLOUDSMITH_API_KEY` | Secret | Cloudsmith API key with upload permissions |
+| `CLOUDSMITH_API_KEY` | Secret | Cloudsmith API key with permission to publish to the repository |
 
-The workspace and Maven repository variables have been configured in this repository's GitHub Actions settings. Store the API key under **Settings → Secrets and variables → Actions → Repository secrets**. The workflow checks the key with Cloudsmith before publishing, then installs Cloudsmith's Maven credential helper in project-local mode (`--local`), which is required for Maven 3.9. It does not need your Cloudsmith username or account password. GitHub keeps the key encrypted and masks it in Actions logs. Rotate the account password shared in chat and use a dedicated Cloudsmith API key for CI. Do not put a password or API key in the workflow, source files, or command-line arguments.
+Add or update these at **GitHub repository → Settings → Secrets and variables → Actions**. The API key is supplied to Cloudsmith's official GitHub Action and is not stored in the repository. Do not use or commit your account password.
 
-Maven writes the JaCoCo report to `target/site/jacoco/`. The published artifact coordinates are `com.example:address-book-microservices:<version>`.
+Each published version is `1.0.<run number>.<run attempt>`. Successful Actions runs include the version and a clickable Cloudsmith repository link in the run summary. The JaCoCo HTML report is generated at `target/site/jacoco/`.
