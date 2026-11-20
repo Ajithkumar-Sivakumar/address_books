@@ -2,7 +2,7 @@
 
 A beginner-friendly address book built with Java 21, Spring Boot, Maven, and PostgreSQL. The Spring Boot application serves both a responsive browser interface and a REST API. Docker runs the app and PostgreSQL as separate containers on a private network, with PostgreSQL data kept in a named volume.
 
-The GitHub Actions workflow runs tests for pull requests and publishes a uniquely versioned application JAR to GitHub Packages on each push to `main`. This project does not provision cloud resources or include Kubernetes or Helm configuration.
+The GitHub Actions workflow runs tests and checks code coverage for pull requests, then publishes the versioned JAR to Cloudsmith on pushes to `main`. Docker image publishing is currently disabled in the workflow. This project does not provision cloud resources or include Kubernetes or Helm configuration.
 
 ## 1. Project overview
 
@@ -408,8 +408,61 @@ Remove the locally built images when they are no longer needed:
 docker image rm addressbook-app:1.0 addressbook-db:1.0
 ```
 
-## 16. GitHub Actions and published JAR
+## 16. GitHub Actions: test, coverage, and Cloudsmith publishing
 
-The workflow at `.github/workflows/publish-jar.yml` runs `mvn verify` on pull requests. Each push to `main` runs `mvn deploy` and publishes the JAR and Maven metadata to GitHub Packages using the unique version `1.0.<GitHub run number>.<run attempt>` (for example, `1.0.42.1`). This avoids reusing a package version, including when a run is retried, and does not use a commit ID or require Git tags. The workflow also uploads the JAR to the Actions run as a downloadable artifact. Logs for the Maven build and publish are shown by expanding the corresponding step in the workflow run. The workflow uses the repository's `GITHUB_TOKEN`; ensure Actions are allowed to write packages in the repository settings.
+The workflow at `.github/workflows/publish-jar.yml` has two active phases:
 
-The published artifact coordinates are `com.example:address-book-microservices:1.0.<GitHub run number>.<run attempt>`. You can download the executable JAR from the package page in GitHub or from the successful Actions run, or consume it as a Maven dependency using the repository URL configured in `pom.xml`.
+1. **Test and measure:** install Java 21, run `mvn clean verify`, and create a JaCoCo HTML coverage report. The build fails if line coverage is below 80% or branch coverage is below 70%. Download the `jacoco-coverage-*` artifact from the Actions run to view `index.html`.
+2. **Publish the JAR:** only after tests pass, pushes to `main` publish the JAR and Maven metadata to Cloudsmith using `mvn deploy`.
+
+Pull requests run tests and coverage only; they do not receive publishing credentials. Published Maven versions use `1.0.<GitHub run number>.<run attempt>` (for example, `1.0.42.1`).
+
+### Set up Cloudsmith and GitHub
+
+Create a Cloudsmith repository with the **Maven** format for the JAR. This project’s Maven repository is `demo-java/address_book`. If you enable the Docker publishing stages later, create a separate **Docker**-format repository and use its slug for `CLOUDSMITH_DOCKER_REPOSITORY`; the Docker stages are currently disabled in the workflow.
+
+In the GitHub repository, open **Settings → Secrets and variables → Actions** and add:
+
+| Name | Type | Value |
+|---|---|---|
+| `CLOUDSMITH_WORKSPACE` | Variable | `demo-java` |
+| `CLOUDSMITH_MAVEN_REPOSITORY` | Variable | `address_book` |
+| `CLOUDSMITH_DOCKER_REPOSITORY` | Variable | Docker repository slug; only needed when Docker publishing is enabled |
+| `CLOUDSMITH_USERNAME` | Secret | Cloudsmith username for the upload account |
+| `CLOUDSMITH_API_KEY` | Secret | Cloudsmith API key with upload permissions |
+
+The workspace and Maven repository variables have been configured in this repository's GitHub Actions settings. Store the username and API key under **Settings → Secrets and variables → Actions → Repository secrets**. The workflow reads them as `${{ secrets.CLOUDSMITH_USERNAME }}` and `${{ secrets.CLOUDSMITH_API_KEY }}`; GitHub keeps secret values encrypted and masks them in Actions logs. The Cloudsmith account password shared in chat is not referenced or stored by this workflow. Rotate it, then create a dedicated Cloudsmith API key for CI. Do not put a password or API key in the workflow, source files, or command-line arguments.
+
+### Commands run by CI
+
+The workflow sets `VERSION` to the unique version for that Actions run. Its test and coverage command is:
+
+```bash
+mvn --batch-mode --no-transfer-progress -Drevision="$VERSION" clean verify
+```
+
+Maven downloads JaCoCo automatically and writes its report to `target/site/jacoco/`. The command to publish the Maven package is:
+
+```bash
+mvn --batch-mode --no-transfer-progress \
+  -Dcloudsmith.workspace="$CLOUDSMITH_WORKSPACE" \
+  -Dcloudsmith.repository="$CLOUDSMITH_MAVEN_REPOSITORY" \
+  -Drevision="$VERSION" deploy -DskipTests
+```
+
+The Docker publishing stages are commented out in the current workflow. If you create a Cloudsmith Docker repository and enable those steps, they will use commands like:
+
+```bash
+IMAGE="docker.cloudsmith.io/$CLOUDSMITH_WORKSPACE/$CLOUDSMITH_DOCKER_REPOSITORY/address-book"
+printf '%s' "$CLOUDSMITH_API_KEY" | docker login docker.cloudsmith.io \
+  --username "$CLOUDSMITH_USERNAME" --password-stdin
+docker build --pull --build-arg "REVISION=$VERSION" \
+  --tag "$IMAGE:$VERSION" \
+  --tag "$IMAGE:sha-${GITHUB_SHA:0:12}" \
+  --tag "$IMAGE:latest" .
+docker push "$IMAGE:$VERSION"
+docker push "$IMAGE:sha-${GITHUB_SHA:0:12}"
+docker push "$IMAGE:latest"
+```
+
+The workflow passes the API key to `docker login` through standard input so it is not shown in the command or build log. A published JAR has coordinates `com.example:address-book-microservices:$VERSION`; the image name is `address-book`.
