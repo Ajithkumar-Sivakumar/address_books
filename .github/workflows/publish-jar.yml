@@ -29,7 +29,7 @@ jobs:
       # Compile the application, run tests, create the JAR, and enforce JaCoCo coverage rules.
       - name: Build, Test and check coverage
         env:
-          VERSION: 1.0.${{ github.run_number }}.${{ github.run_attempt }} # Create a unique build version.
+          VERSION: ${{ github.sha }} # Use the triggering commit ID as the package version.
         run: mvn --batch-mode --no-transfer-progress clean verify -Drevision="${VERSION}" # Run Maven's full verification phase.
 
       # Authenticate on branch pushes or manual runs, but never on pull requests.
@@ -44,7 +44,7 @@ jobs:
       - name: Publish to Cloudsmith
         if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' # Publish branch pushes and manual runs only.
         env:
-          VERSION: 1.0.${{ github.run_number }}.${{ github.run_attempt }} # Match the version tested above.
+          VERSION: ${{ github.sha }} # Match the commit version tested above.
           CLOUDSMITH_WORKSPACE: ${{ vars.CLOUDSMITH_WORKSPACE }} # Cloudsmith workspace slug.
           CLOUDSMITH_MAVEN_REPOSITORY: ${{ vars.CLOUDSMITH_MAVEN_REPOSITORY }} # Cloudsmith Maven repository slug.
         run: |

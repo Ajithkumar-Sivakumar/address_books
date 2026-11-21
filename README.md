@@ -2,7 +2,7 @@
 
 A beginner-friendly address book built with Java 21, Spring Boot, Maven, and PostgreSQL. The Spring Boot application serves both a responsive browser interface and a REST API. Docker runs the app and PostgreSQL as separate containers on a private network, with PostgreSQL data kept in a named volume.
 
-GitHub Actions runs tests and coverage checks on pull requests and publishes versioned JARs to Cloudsmith from `main`.
+GitHub Actions runs tests and coverage checks on pull requests and publishes versioned JARs to Cloudsmith on branch pushes.
 
 ## 1. Project overview
 
@@ -414,7 +414,7 @@ The workflow in `.github/workflows/publish-jar.yml`:
 
 1. Checks out the code and sets up Java 21 with Maven dependency caching.
 2. Runs tests and JaCoCo coverage checks. The build requires at least 80% line coverage and 70% branch coverage.
-3. On pushes to `main` (or manual runs on `main`), signs in to Cloudsmith and publishes the tested Maven package. Pull requests do not receive Cloudsmith credentials.
+3. On branch pushes (or manual runs), signs in to Cloudsmith and publishes the tested Maven package. Pull requests do not receive Cloudsmith credentials.
 
 ### Cloudsmith settings
 
@@ -430,4 +430,4 @@ The workflow uses these GitHub Actions settings:
 
 Add or update these at **GitHub repository → Settings → Secrets and variables → Actions**. The API key is supplied to Cloudsmith's official GitHub Action and is not stored in the repository. Do not use or commit your account password.
 
-Each published version is `1.0.<run number>.<run attempt>`. Successful Actions runs include the version and a clickable Cloudsmith repository link in the run summary. The JaCoCo HTML report is generated at `target/site/jacoco/`.
+Each published version is the triggering commit's full SHA. Successful Actions runs include the version and a clickable Cloudsmith repository link in the run summary. The JaCoCo HTML report is generated at `target/site/jacoco/`.
